@@ -1,55 +1,38 @@
 import os
-import json
-from typing import Any, Dict, Optional
-class ConfigLoader:
-    def __init__(self, defaults: Optional[Dict[str, Any]] = None, config_path: Optional[str] = None, env_prefix: str = 'APP_'):
-        self._data = defaults.copy() if defaults else {}
-        if config_path:
-            self._load_file(config_path)
-        self._load_env(env_prefix)
-        self._normalize()
-    def _load_file(self, path: str):
-        try:
-            with open(path) as f:
-                data = json.load(f)
-                self._deep_merge(self._data, data)
-        except Exception:
-            pass
-    def _load_env(self, prefix: str):
-        for k, v in os.environ.items():
-            if not k.startswith(prefix):
-                continue
-            key = k[len(prefix):].lower()
-            self._data[key] = self._parse_value(v)
-    def _parse_value(self, val: str) -> Any:
-        if val.lower() == 'true': return True
-        if val.lower() == 'false': return False
-        try: return int(val)
-        except: pass
-        try: return float(val)
-        except: pass
-        return val
-    def _deep_merge(self, base: Dict, update: Dict):
-        for k, v in update.items():
-            if k in base and isinstance(base[k], dict) and isinstance(v, dict):
-                self._deep_merge(base[k], v)
-            else:
-                base[k] = v
-    def _normalize(self):
-        self._data = {k.lower(): v for k, v in self._data.items()}
-    def get(self, key: str, default: Any = None) -> Any:
-        return self._data.get(key.lower(), default)
+from typing import Any, Dict
+
+class ChameleonConfig:
+    def __init__(self, defaults: Dict[str, Any]) -> None:
+        self._store = dict(defaults)
+        self._absorb_environment()
+
+    def _absorb_environment(self) -> None:
+        for key in self._store:
+            env_key = f"TOOLKIT_{key.upper()}"
+            if env_key in os.environ:
+                raw_val = os.environ[env_key]
+                self._store[key] = self._cast(self._store[key], raw_val)
+
+    @staticmethod
+    def _cast(original: Any, incoming: str) -> Any:
+        if isinstance(original, bool):
+            return incoming.lower() in ('true', '1', 'yes', 'on')
+        if isinstance(original, int):
+            return int(incoming)
+        if isinstance(original, float):
+            return float(incoming)
+        return incoming
+
     def __getattr__(self, item: str) -> Any:
-        if item in self._data:
-            return self._data[item]
-        raise AttributeError(item)
-    def set(self, key: str, value: Any):
-        self._data[key.lower()] = value
-    def to_dict(self) -> Dict[str, Any]:
-        return self._data.copy()
-    def reload(self, defaults: Optional[Dict] = None, path: Optional[str] = None):
-        if defaults:
-            self._data = defaults.copy()
-        if path:
-            self._load_file(path)
-        self._normalize()
+        if item in self._store:
+            return self._store[item]
+        raise AttributeError(f"Config missing key: {item}")
+
+    def __getitem__(self, item: str) -> Any:
+        return self.__getattr__(item)
+
+    def snapshot(self) -> Dict[str, Any]:
+        return dict(self._store)
+
+def load_config(defaults: Dict[str, Any]) -> ChameleonConfig:
+    return ChameleonConfig(defaults)
