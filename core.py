@@ -1,43 +1,37 @@
-import re
-from dataclasses import dataclass
-from typing import List
+import functools
+from typing import Any, Callable, Dict, List
 
-@dataclass
-class ValidationResult:
-    is_valid: bool
-    reason: str
+class CoreModule:
+    def __init__(self) -> None:
+        self._cache: Dict[str, Any] = {}
+        self._access_count: Dict[str, int] = {}
 
-def check_format(value: str) -> ValidationResult:
-    if not value:
-        return ValidationResult(False, "empty")
-    if not re.match(r"^[a-z0-9]+$", value.lower()):
-        return ValidationResult(False, "invalid chars")
-    if len(value) < 2:
-        return ValidationResult(False, "too short")
-    return ValidationResult(True, "ok")
+    def _make_key(self, func: Callable, args: tuple, kwargs: Dict) -> str:
+        return "{}_{}_{}".format(func.__name__, hash(args), hash(tuple(sorted(kwargs.items()))))
 
-def transform_value(value: str) -> str:
-    return value.upper() + "_PROCESSED"
+    def optimize(self, func: Callable) -> Callable:
+        @functools.wraps(func)
+        def wrapper(*args: Any, **kwargs: Any) -> Any:
+            key = self._make_key(func, args, kwargs)
+            if key in self._cache:
+                self._access_count[key] = self._access_count.get(key, 0) + 1
+                return self._cache[key]
+            result = func(*args, **kwargs)
+            self._cache[key] = result
+            self._access_count[key] = 1
+            return result
+        return wrapper
 
-def main_processing_loop(raw_inputs: List[str]) -> List[str]:
-    validated_outputs: List[str] = []
-    for raw in raw_inputs:
-        validation = check_format(raw)
-        if validation.is_valid:
-            transformed = transform_value(raw)
-            validated_outputs.append(transformed)
-        else:
-            validated_outputs.append(f"INVALID_{validation.reason.upper()}")
-    final_results = []
-    pos = 0
-    while pos < len(validated_outputs):
-        item = validated_outputs[pos]
-        if not item.startswith("INVALID"):
-            final_results.append(item)
-        pos += 1
-    return final_results
+    def get_cache_stats(self) -> Dict[str, int]:
+        return {k: v for k, v in self._access_count.items()}
 
-if __name__ == "__main__":
-    test_data = ["hello", "123abc", "Bad!", "", "ok", "a"]
-    result = main_processing_loop(test_data)
-    print(result)
+    def clear_cache(self) -> None:
+        self._cache.clear()
+        self._access_count.clear()
+
+    def batch_optimize(self, func: Callable, data: List[Any], batch_size: int = 50) -> List[Any]:
+        results = []
+        for i in range(0, len(data), batch_size):
+            batch = data[i:i + batch_size]
+            results.extend([self.optimize(func)(item) for item in batch])
+        return results
