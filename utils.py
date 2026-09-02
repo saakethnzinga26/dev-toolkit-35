@@ -1,36 +1,48 @@
-import sys
-import functools
-import traceback
+from typing import Any, Dict, List, Union
 
-class DevToolkitError(Exception):
-    pass
+import copy
 
-def resilient_execution(default_return=None, log_errors=True):
-    def decorator(func):
-        @functools.wraps(func)
-        def wrapper(*args, **kwargs):
-            try:
-                return func(*args, **kwargs)
-            except (TypeError, ValueError, ZeroDivisionError) as e:
-                if log_errors:
-                    sys.stderr.write(f"⚠ [EdgeCase] {func.__name__}: {type(e).__name__} -> {e}\n")
-                return default_return
-            except Exception as e:
-                tb = traceback.format_exc()
-                raise DevToolkitError(f"Critical failure in {func.__name__}: {e}\n{tb}") from e
-        return wrapper
-    return decorator
+def flatten_nested_dict(data: Dict[str, Any], prefix: str = '') -> Dict[str, Any]:
+    """Flatten nested dictionary using stack based iteration."""
+    result: Dict[str, Any] = {}
+    stack: List[tuple] = [(data, prefix)]
+    while stack:
+        current, path = stack.pop()
+        for key, value in current.items():
+            new_path = f"{path}.{key}" if path else key
+            if isinstance(value, dict):
+                stack.append((value, new_path))
+            else:
+                result[new_path] = value
+    return result
 
-@resilient_execution(default_return=0)
-def parse_numeric_safely(val):
-    if val is None:
-        raise ValueError("Value cannot be None")
-    if isinstance(val, str) and not val.strip():
-        return 0
-    return float(val)
+def merge_data(*data_sources: Dict[str, Any]) -> Dict[str, Any]:
+    """Merge dicts with deep merge using stack for nested keys."""
+    if not data_sources:
+        return {}
+    merged = copy.deepcopy(data_sources[0])
+    for source in data_sources[1:]:
+        stack = [(merged, source)]
+        while stack:
+            target, src = stack.pop()
+            for k, v in src.items():
+                if k in target and isinstance(target[k], dict) and isinstance(v, dict):
+                    stack.append((target[k], v))
+                else:
+                    target[k] = copy.deepcopy(v)
+    return merged
 
-@resilient_execution(default_return="")
-def extract_nested_key(data, keys):
-    for key in keys:
-        data = data[key]
-    return str(data)
+def handle_general_data(data: Any, mode: str = 'flatten') -> Any:
+    """General data handling utility supporting multiple modes."""
+    if mode == 'flatten' and isinstance(data, dict):
+        return flatten_nested_dict(data)
+    elif mode == 'merge' and isinstance(data, (list, tuple)):
+        return merge_data(*[d for d in data if isinstance(d, dict)])
+    elif mode == 'normalize':
+        if isinstance(data, dict):
+            return {k: handle_general_data(v, 'normalize') for k, v in data.items()}
+        elif isinstance(data, list):
+            return [handle_general_data(item, 'normalize') for item in data]
+        else:
+            return data
+    return data
