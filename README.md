@@ -1,44 +1,42 @@
 # dev-toolkit-35
 
-dev-toolkit-35 is a versatile Python library designed to simplify the development workflow by providing essential tools and utilities for developers. This toolkit combines functionalities for code management, testing, and debugging, allowing you to streamline your development process efficiently.
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+
+dev-toolkit-35 is a lightweight collection of Python utilities that simplifies routine development tasks. It offers reliable tools for configuration handling, logging, and performance measurement with minimal overhead.
 
 ## Features
-
-- **File Manipulation Utilities:** Easily read, write, and manipulate files with built-in functions tailored for common tasks, helping you save time on repetitive operations.
-- **Enhanced Logging System:** Integrate a customizable logging feature that records application events, making debugging and monitoring seamless and intuitive.
-- **Automated Testing Framework:** Implement and run tests effortlessly with a straightforward setup that supports various testing scenarios, enhancing code reliability.
-- **Command-Line Interface (CLI) Integration:** Utilize a user-friendly CLI that allows for the execution of commands directly from your terminal, improving overall workflow efficiency.
+- Schema-based configuration loader supporting YAML and JSON with automatic validation
+- Context-aware structured logger that outputs in JSON format for easy parsing
+- Precise execution timer implemented as a context manager for code profiling
+- CLI command to initialize new Python projects with standard layout
 
 ## Installation
 
-To install dev-toolkit-35, ensure you have Python 3.7+ and use pip:
+Install via pip:
 
 ```bash
 pip install dev-toolkit-35
 ```
 
-## Basic Usage
+Install from source:
 
-Here’s a quick example demonstrating how to use the File Manipulation utility and the Enhanced Logging System:
-
-```python
-from dev_toolkit import FileUtil, Logger
-
-# Initialize logger
-logger = Logger(log_level="DEBUG")
-logger.info("Starting file operations.")
-
-# Read content from a file
-file_content = FileUtil.read_file('example.txt')
-logger.debug(f"File content: {file_content}")
-
-# Write content to a new file
-FileUtil.write_file('output.txt', 'This is a test output.')
-logger.info("File operations completed.")
+```bash
+git clone https://github.com/Developer/dev-toolkit-35.git
+cd dev-toolkit-35
+pip install -e .
 ```
 
-## License
+## Usage
 
-![MIT License](https://img.shields.io/badge/License-MIT-blue.svg)
+```python
+from dev_toolkit import load_config, get_logger, Timer
 
-This project is licensed under the MIT License. See the [LICENSE](LICENSE) file for details.
+config = load_config('config.yaml')
+logger = get_logger(__name__)
+
+with Timer() as t:
+    # perform work
+    pass
+
+logger.info("Task completed", duration=t.elapsed)
+```
