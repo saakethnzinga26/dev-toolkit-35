@@ -1,37 +1,39 @@
-import functools
-from typing import Any, Callable, Dict, List
+import sys
+from typing import Callable, Any, Dict
+from collections import Counter
 
-class CoreModule:
-    def __init__(self) -> None:
-        self._cache: Dict[str, Any] = {}
-        self._access_count: Dict[str, int] = {}
+class AdaptiveCoreDispatcher:
+    """
+    Dynamically optimizes method lookup overhead by maintaining an
+    interned cache of frequently accessed execution paths.
+    """
+    def __init__(self, target_instance: Any):
+        self._target = target_instance
+        self._hot_threshold = 5
+        self._call_counts: Counter[str] = Counter()
+        self._optimized_paths: Dict[str, Callable[..., Any]] = {}
 
-    def _make_key(self, func: Callable, args: tuple, kwargs: Dict) -> str:
-        return "{}_{}_{}".format(func.__name__, hash(args), hash(tuple(sorted(kwargs.items()))))
+    def execute(self, action_name: str, *args: Any, **kwargs: Any) -> Any:
+        # Intern strings to reduce dictionary lookup overhead
+        key = sys.intern(action_name)
+        
+        # Fast path bypasses getattr
+        if key in self._optimized_paths:
+            return self._optimized_paths[key](*args, **kwargs)
 
-    def optimize(self, func: Callable) -> Callable:
-        @functools.wraps(func)
-        def wrapper(*args: Any, **kwargs: Any) -> Any:
-            key = self._make_key(func, args, kwargs)
-            if key in self._cache:
-                self._access_count[key] = self._access_count.get(key, 0) + 1
-                return self._cache[key]
-            result = func(*args, **kwargs)
-            self._cache[key] = result
-            self._access_count[key] = 1
-            return result
-        return wrapper
+        self._call_counts[key] += 1
+        
+        target_method = getattr(self._target, key, None)
+        if not target_method or not callable(target_method):
+            raise AttributeError(f"Executable action '{key}' not found on core")
 
-    def get_cache_stats(self) -> Dict[str, int]:
-        return {k: v for k, v in self._access_count.items()}
+        # Promote to optimized lookup after frequent hits
+        if self._call_counts[key] >= self._hot_threshold:
+            self._optimized_paths[key] = target_method
+            del self._call_counts[key]
 
-    def clear_cache(self) -> None:
-        self._cache.clear()
-        self._access_count.clear()
+        return target_method(*args, **kwargs)
 
-    def batch_optimize(self, func: Callable, data: List[Any], batch_size: int = 50) -> List[Any]:
-        results = []
-        for i in range(0, len(data), batch_size):
-            batch = data[i:i + batch_size]
-            results.extend([self.optimize(func)(item) for item in batch])
-        return results
+    def clear_optimization_metrics(self) -> None:
+        self._call_counts.clear()
+        self._optimized_paths.clear()
